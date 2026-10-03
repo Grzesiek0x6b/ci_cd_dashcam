@@ -1,6 +1,6 @@
 """CLI: uruchamia potok (DETR -> śledzenie -> głębia) na pliku wideo.
 
-Użycie: perception VIDEO [--out wynik.mp4] [--json wynik.json] [--no-depth] [--device cpu]
+Użycie: perception VIDEO [--out wynik.mp4] [--out-tracks tory.mp4] [--out-depth glebia.mp4] [--json wynik.json] [--no-depth] [--device cpu]
 """
 
 import argparse
@@ -32,6 +32,26 @@ def draw(frame: np.ndarray, records: list[Record], id2label: dict[int, str]) -> 
     return vis
 
 
+def draw_tracks(
+    frame: np.ndarray, by_frame: dict[int, list[Record]], index: int, id2label: dict[int, str]
+) -> np.ndarray:
+    """Skrzynki + ślad toru (środek dolnej krawędzi skrzynki z klatek 0..index) na kopii klatki RGB."""
+    vis = draw(frame, by_frame.get(index, []), id2label)
+    trails: dict[int, list[tuple[int, int]]] = {}
+    for fi in range(index + 1):
+        for r in by_frame.get(fi, []):
+            trails.setdefault(r.id, []).append((int((r.box[0] + r.box[2]) / 2), int(r.box[3])))
+    for tid, pts in trails.items():
+        if len(pts) > 1:
+            cv2.polylines(vis, [np.array(pts, dtype=np.int32)], False, _color(tid), 2)
+    return vis
+
+
+def depth_frame(depth_u8: np.ndarray) -> np.ndarray:
+    """Koloruje mapę głębi (uint8, jaśniej = bliżej) do klatki RGB."""
+    return cv2.cvtColor(cv2.applyColorMap(depth_u8, cv2.COLORMAP_INFERNO), cv2.COLOR_BGR2RGB)
+
+
 def write_video(path: Path, frames: list[np.ndarray], fps: float) -> Path:
     if path.suffix.lower() not in ("", ".mp4"):
         raise ValueError("Plik wyjściowy musi mieć rozszerzenie .mp4")
@@ -54,6 +74,8 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="perception", description=__doc__)
     ap.add_argument("video", type=Path, help="plik wideo (dashcam)")
     ap.add_argument("--out", type=Path, help="zapisz wideo z naniesionymi skrzynkami (mp4)")
+    ap.add_argument("--out-tracks", type=Path, help="zapisz wideo z torami obiektów (mp4)")
+    ap.add_argument("--out-depth", type=Path, help="zapisz wideo z mapą głębi (mp4)")
     ap.add_argument("--json", type=Path, help="zapisz rekordy (klatka, id, klasa, box, near) do JSON")
     ap.add_argument("--max-frames", type=int, default=180)
     ap.add_argument("--stride", type=int, default=4, help="bierz co N-tą klatkę")
@@ -61,6 +83,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-depth", action="store_true", help="pomiń estymację głębi (szybciej)")
     ap.add_argument("--device", default=None, help="cpu/mps/cuda; domyślnie auto")
     args = ap.parse_args(argv)
+    if args.out_depth and args.no_depth:
+        ap.error("--out-depth wymaga głębi (usuń --no-depth)")
 
     try:
         frames, fps = load_frames(args.video, args.max_frames, args.stride, args.width)
@@ -113,6 +137,19 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Nie udało się zapisać wideo: {exc}", file=sys.stderr)
             return 2
         print(f"Wideo: {out_path}")
+    outputs = []
+    if args.out_tracks:
+        outputs.append(
+            (args.out_tracks, [draw_tracks(f, by_frame, i, detector.id2label) for i, f in enumerate(frames)])
+        )
+    if args.out_depth:
+        outputs.append((args.out_depth, [depth_frame(d) for d in res.depth_maps]))
+    for path, vis_frames in outputs:
+        try:
+            print(f"Wideo: {write_video(path, vis_frames, fps)}")
+        except (RuntimeError, ValueError) as exc:
+            print(f"Nie udało się zapisać wideo: {exc}", file=sys.stderr)
+            return 2
     return 0
 
 

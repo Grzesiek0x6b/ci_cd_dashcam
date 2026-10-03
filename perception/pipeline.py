@@ -27,6 +27,7 @@ class RunResult:
     records: list[Record] = field(default_factory=list)
     detections_per_frame: list[int] = field(default_factory=list)
     seconds_per_frame: list[float] = field(default_factory=list)
+    depth_maps: list[np.ndarray] = field(default_factory=list)  # uint8 0..255, puste bez głębi
 
 
 def run(
@@ -42,6 +43,8 @@ def run(
         boxes, scores, labels = detect(img)
         active = tracker.update(boxes, scores, labels)
         dm = depth(img) if depth is not None else None
+        if dm is not None:
+            result.depth_maps.append((dm * 255).astype(np.uint8))
         for t in active:
             near = near_score(dm, t.box) if dm is not None else None
             result.records.append(Record(fi, t.id, t.label, t.box.copy(), near))

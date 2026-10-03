@@ -21,3 +21,8 @@ temp/
 
 # Python bytecode
 *.pyc
+
+
+htmlcov/
+
+.coverage

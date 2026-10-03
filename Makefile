@@ -8,3 +8,6 @@ check:
 
 ui: 
 	uv run --extra ml --extra ui perception-ui
+
+cov:
+	uv run pytest -m "not model" --cov --cov-report=term-missing --cov-report=html -q

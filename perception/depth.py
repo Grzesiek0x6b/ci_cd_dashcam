@@ -24,7 +24,9 @@ class DepthEstimator:
 
         from perception.detect import pick_device
 
-        self.pipe = pipeline("depth-estimation", model=model_id, device=device or pick_device())
+        self.pipe = pipeline(
+            "depth-estimation", model=model_id, device=device or pick_device()
+        )
 
     def __call__(self, img: np.ndarray) -> np.ndarray:
         """img: RGB uint8. Zwraca mapę (H, W) w 0..1, większe = bliżej (głębia WZGLĘDNA)."""
@@ -33,6 +35,8 @@ class DepthEstimator:
 
         d = self.pipe(Image.fromarray(img))["predicted_depth"]
         d = torch.nn.functional.interpolate(
-            d.float().cpu().reshape(1, 1, *d.shape[-2:]), size=img.shape[:2], mode="bicubic"
+            d.float().cpu().reshape(1, 1, *d.shape[-2:]),
+            size=img.shape[:2],
+            mode="bicubic",
         )[0, 0].numpy()
         return (d - d.min()) / (d.max() - d.min() + 1e-9)

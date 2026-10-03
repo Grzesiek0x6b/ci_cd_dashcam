@@ -1,4 +1,3 @@
-
 import statistics
 
 from perception.pipeline import RunResult

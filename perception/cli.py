@@ -32,12 +32,22 @@ def draw(frame: np.ndarray, records: list[Record], id2label: dict[int, str]) -> 
     return vis
 
 
-def write_video(path: Path, frames: list[np.ndarray], fps: float) -> None:
+def write_video(path: Path, frames: list[np.ndarray], fps: float) -> Path:
+    if path.suffix.lower() not in ("", ".mp4"):
+        raise ValueError("Plik wyjściowy musi mieć rozszerzenie .mp4")
+    if not path.suffix:
+        path = path.with_suffix(".mp4")
     h, w = frames[0].shape[:2]
     writer = cv2.VideoWriter(str(path), cv2.VideoWriter.fourcc(*"mp4v"), fps, (w, h))
-    for f in frames:
-        writer.write(cv2.cvtColor(f, cv2.COLOR_RGB2BGR))
-    writer.release()
+    if not writer.isOpened():
+        writer.release()
+        raise RuntimeError(f"Nie można otworzyć pliku wyjściowego: {path}")
+    try:
+        for f in frames:
+            writer.write(cv2.cvtColor(f, cv2.COLOR_RGB2BGR))
+    finally:
+        writer.release()
+    return path
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -95,10 +105,14 @@ def main(argv: list[str] | None = None) -> int:
         args.json.write_text(json.dumps(rows, indent=2) + "\n")
         print(f"JSON: {args.json}")
     if args.out:
-        write_video(
-            args.out, [draw(f, by_frame.get(i, []), detector.id2label) for i, f in enumerate(frames)], fps
-        )
-        print(f"Wideo: {args.out}")
+        try:
+            out_path = write_video(
+                args.out, [draw(f, by_frame.get(i, []), detector.id2label) for i, f in enumerate(frames)], fps
+            )
+        except (RuntimeError, ValueError) as exc:
+            print(f"Nie udało się zapisać wideo: {exc}", file=sys.stderr)
+            return 2
+        print(f"Wideo: {out_path}")
     return 0
 
 

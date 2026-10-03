@@ -26,3 +26,5 @@ temp/
 htmlcov/
 
 .coverage
+
+coverage.xml

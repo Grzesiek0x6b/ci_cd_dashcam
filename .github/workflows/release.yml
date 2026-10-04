@@ -54,7 +54,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$TAG" ./*.whl detr.onnx metrics.json SHA256SUMS \
-            --target "$GITHUB_SHA" --title "$TAG" --generate-notes
+            --target "$GITHUB_SHA" --verify-tag --title "$TAG" --generate-notes
   image:
     needs: release
     runs-on: ubuntu-latest

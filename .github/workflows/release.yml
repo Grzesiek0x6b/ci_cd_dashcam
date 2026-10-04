@@ -3,9 +3,17 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag wydania, np. v0.2.2 (musi zgadzać się z wersją w pyproject.toml)"
+        required: true
 
 permissions:
   contents: write
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
   release:
@@ -23,8 +31,8 @@ jobs:
       - name: Tag musi zgadzać się z wersją w pyproject.toml
         run: |
           VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
-          if [ "v$VERSION" != "$GITHUB_REF_NAME" ]; then
-            echo "Tag $GITHUB_REF_NAME != wersja v$VERSION w pyproject.toml" >&2
+          if [ "v$VERSION" != "$TAG" ]; then
+            echo "Tag $TAG != wersja v$VERSION w pyproject.toml" >&2
             exit 1
           fi
 
@@ -45,8 +53,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" ./*.whl detr.onnx metrics.json SHA256SUMS \
-            --title "$GITHUB_REF_NAME" --generate-notes
+          gh release create "$TAG" ./*.whl detr.onnx metrics.json SHA256SUMS \
+            --target "$GITHUB_SHA" --title "$TAG" --generate-notes
   image:
     needs: release
     runs-on: ubuntu-latest
@@ -67,7 +75,7 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
-            type=ref,event=tag
+            type=raw,value=${{ env.TAG }}
       - uses: docker/build-push-action@v6
         with:
           context: .

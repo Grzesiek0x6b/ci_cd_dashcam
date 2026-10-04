@@ -37,9 +37,11 @@ def _write_browser_video(path: Path, frames: list[np.ndarray], fps: float) -> No
             "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(path),
         ]  # fmt: skip
         proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+        stdin = proc.stdin
+        assert stdin is not None  # stdin=PIPE gwarantuje strumień
         for f in frames:
-            proc.stdin.write(np.ascontiguousarray(f).tobytes())
-        proc.stdin.close()
+            stdin.write(np.ascontiguousarray(f).tobytes())
+        stdin.close()
         if proc.wait() == 0:
             return
     writer = cv2.VideoWriter(str(path), cv2.VideoWriter.fourcc(*"mp4v"), fps, (w, h))
